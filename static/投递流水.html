@@ -24,35 +24,129 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>投递流水</h1>
+      <h1>投递流水 · 收据窗折叠</h1>
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <p class="骨签">骨签：第二张回执在窗内必须折叠 ｜ 路径甲：开窗指纹入收据窗账册 · 窗内重复收据折边表、拒回刷正式尝试</p>
     </header>
 
 <section class="卷">
+  <h2>收下回执（当场判窗）</h2>
   <label>事件号</label><input id="事件号" placeholder="EVT-..."/>
-  <label><input type="checkbox" id="强制失败"/> 强制失败（测死信）</label>
+  <label>回执号</label><input id="回执号" placeholder="RCPT-...（同号重放幂等）"/>
   <p class="消息" id="消息"></p>
+  <button class="按钮" type="button" id="回执钮">收下回执</button>
+  <button class="按钮 次" type="button" id="查窗钮">查收据窗态</button>
+  <span id="窗态" class="徽章">—</span>
+</section>
+
+<section class="卷">
+  <label>事件号</label><input id="投递事件号" placeholder="EVT-..."/>
+  <label><input type="checkbox" id="强制失败"/> 强制失败（测死信）</label>
   <button class="按钮" type="button" id="投递钮">签名投递一次</button>
   <button class="按钮 次" type="button" id="批量钮">批量重试待投</button>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>尝试号</th><th>事件号</th><th>端点键</th><th>签名摘要</th><th>状态</th><th>响应码</th></tr></thead><tbody id="表"></tbody></table></div></section>
+
+<section class="卷">
+  <h2>正式投递尝试（窗内影子不另起行，只在原行旁联标）</h2>
+  <div class="表绕"><table><thead><tr>
+    <th>尝试号</th><th>事件号</th><th>端点键</th><th>签名摘要</th><th>状态</th><th>响应码</th><th>窗内折叠</th><th>行末说明</th>
+  </tr></thead><tbody id="表"></tbody></table></div>
+</section>
+
+<section class="卷">
+  <h2>回执折叠边表（影子回执 · 与尝试行联查）</h2>
+  <div class="表绕"><table><thead><tr>
+    <th>折叠号</th><th>事件号</th><th>原尝试号</th><th>回执号</th><th>标记</th><th>说明</th><th>处置</th><th>回执时</th>
+  </tr></thead><tbody id="折叠表"></tbody></table></div>
+</section>
 
   </main>
 
 <script>
+function 填窗态(st) {
+  const el = document.getElementById('窗态');
+  if (!st) { el.textContent = '无窗态'; return; }
+  if (st.在窗内) {
+    el.textContent = '窗内 · 剩余约 ' + (st.剩余秒 ?? 0) + ' 秒 · 锚 ' + (st.原尝试号 || '—') + ' · 已折 ' + (st.折叠数 ?? 0);
+  } else {
+    el.textContent = '窗外（下一张回执将追加新尝试）';
+  }
+}
+
+async function 刷折叠() {
+  const rows = await 投递台.getJSON('/api/折叠');
+  const tb = document.getElementById('折叠表'); tb.innerHTML = '';
+  for (const r of rows) {
+    if (Number(r.是否折叠) !== 1) continue;
+    const tr = 投递台.行(
+      '<td>' + 投递台.安全文本(r.折叠号) + '</td>' +
+      '<td>' + 投递台.安全文本(r.事件号) + '</td>' +
+      '<td>' + 投递台.安全文本(r.原尝试号) + '</td>' +
+      '<td>' + 投递台.安全文本(r.回执号) + '</td>' +
+      '<td><span class="徽章 警">窗内已折叠</span></td>' +
+      '<td>窗内重复收据</td>' +
+      '<td>' + 投递台.安全文本(r.处置) + '</td>' +
+      '<td>' + 投递台.安全文本(r.回执时) + '</td>'
+    );
+    tb.appendChild(tr);
+  }
+}
+
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/投递');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.尝试号)+'</td><td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.签名摘要)+'</td><td></td><td>'+投递台.安全文本(r.响应码)+'</td>');
-    tr.children[4].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
+    const n = Number(r.折叠数 || r.窗内折叠数 || 0);
+    const 折标 = n > 0
+      ? '<span class="徽章 警" title="窗内重复收据">窗内已折叠 ×' + n + '</span>'
+      : '<span class="徽章">—</span>';
+    const 行末 = n > 0 ? '窗内重复收据' : 投递台.安全文本(r.行末说明 || '');
+    const tr = 投递台.行(
+      '<td>'+投递台.安全文本(r.尝试号)+'</td>' +
+      '<td>'+投递台.安全文本(r.事件号)+'</td>' +
+      '<td>'+投递台.安全文本(r.端点键)+'</td>' +
+      '<td>'+投递台.安全文本(r.签名摘要)+'</td>' +
+      '<td></td>' +
+      '<td>'+投递台.安全文本(r.响应码)+'</td>' +
+      '<td>'+折标+'</td>' +
+      '<td class="行末说明">'+行末+'</td>'
+    );
+    tr.children[4].appendChild(投递台.徽章(r.状态));
+    tb.appendChild(tr);
   }
+  await 刷折叠();
 }
+
+document.getElementById('回执钮').onclick = async () => {
+  const 消息 = document.getElementById('消息');
+  const eid = document.getElementById('事件号').value.trim();
+  const no = document.getElementById('回执号').value.trim();
+  try {
+    const rep = await 投递台.postJSON('/api/回执', { 事件号: eid, 回执号: no });
+    消息.textContent = JSON.stringify({
+      处置: rep.处置, 折叠: rep.折叠, 写出: rep.写出,
+      尝试号: rep.尝试号, 标记: rep.标记, 说明: rep.说明
+    });
+    if (eid) {
+      try { 填窗态(await 投递台.getJSON('/api/收据窗?事件号=' + encodeURIComponent(eid))); } catch (_) {}
+    }
+    await 刷表();
+  } catch (e) { 消息.textContent = e.message; }
+};
+
+document.getElementById('查窗钮').onclick = async () => {
+  const eid = document.getElementById('事件号').value.trim();
+  if (!eid) { document.getElementById('消息').textContent = '先填事件号'; return; }
+  try {
+    填窗态(await 投递台.getJSON('/api/收据窗?事件号=' + encodeURIComponent(eid)));
+  } catch (e) { document.getElementById('消息').textContent = e.message; }
+};
+
 document.getElementById('投递钮').onclick = async () => {
   const 消息 = document.getElementById('消息');
   try {
     const rep = await 投递台.postJSON('/api/投递', {
-      事件号: document.getElementById('事件号').value,
+      事件号: document.getElementById('投递事件号').value,
       强制失败: document.getElementById('强制失败').checked,
     });
     消息.textContent = JSON.stringify(rep);

@@ -4,7 +4,7 @@ from pathlib import Path
 from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from app import seed
-from app.services import 会话, 入队, 投递, 死信, 重试, 互证, 端点, 夹具, 说明, 签名目录
+from app.services import 会话, 入队, 投递, 死信, 重试, 互证, 端点, 夹具, 说明, 签名目录, 收据窗
 
 _STATIC = Path(__file__).resolve().parent / "static"
 
@@ -97,9 +97,87 @@ def create_app() -> Flask:
     def api_投递():
         body = request.get_json(force=True, silent=True) or {}
         try:
+            # 若调用方在投递口附带回执号，委托收据窗裁决，避免被
+            # 「事件状态为已投递，不可再投」的状态守卫弄成假绿。
+            回执号 = body.get("回执号") or body.get("收据号")
+            if 回执号:
+                return jsonify(收据窗.收下回执(
+                    body.get("事件号"),
+                    回执号=回执号,
+                    强制失败=bool(body.get("强制失败")),
+                ))
             return jsonify(投递.投递一次(body["事件号"], bool(body.get("强制失败"))))
         except (KeyError, ValueError) as e:
             return jsonify({"错误": str(e)}), 400
+
+    def _收下回执核心():
+        body = request.get_json(force=True, silent=True) or {}
+        # 兼容 query/form 传参
+        eid = body.get("事件号") or request.args.get("事件号")
+        no = (
+            body.get("回执号")
+            or body.get("收据号")
+            or request.args.get("回执号")
+            or request.args.get("收据号")
+        )
+        try:
+            out = 收据窗.收下回执(
+                eid,
+                回执号=no,
+                窗秒=body.get("窗秒", body.get("收据窗秒")),
+                现在=body.get("现在", body.get("当前纪元")),
+            )
+            # 默认幂等 200；调用方显式要求严格冲突码时，折叠/重放给 409
+            if body.get("严格") and (out.get("折叠") or out.get("幂等重放")):
+                return jsonify(out), 409
+            return jsonify(out)
+        except (KeyError, ValueError) as e:
+            msg = str(e)
+            # 事件不存在更贴近 REST 语义；其余入参/状态问题仍为 400
+            if "无此事件" in msg:
+                return jsonify({"ok": False, "错误": msg}), 404
+            return jsonify({"ok": False, "错误": msg}), 400
+
+    @app.post("/api/回执")
+    @app.post("/api/回执收下")
+    @app.post("/api/收据")
+    @app.post("/api/收据/收下")
+    @app.post("/api/回执/收下")
+    @app.post("/api/回执/折叠")
+    @app.post("/api/投递/回执")
+    @app.post("/api/receipt")
+    @app.post("/api/receipts")
+    @app.post("/api/win-fold/receipt")
+    def api_回执收下():
+        return _收下回执核心()
+
+    @app.get("/api/回执")
+    def api_回执列表():
+        eid = request.args.get("事件号")
+        return jsonify(签名目录.回执列表(eid))
+
+    @app.get("/api/折叠")
+    def api_折叠列表():
+        eid = request.args.get("事件号")
+        return jsonify(签名目录.回执列表(eid))
+
+    @app.get("/api/收据窗")
+    def api_收据窗状态():
+        eid = request.args.get("事件号")
+        if not eid:
+            return jsonify({"错误": "缺事件号"}), 400
+        st = 收据窗.窗状态(eid)
+        if st is None:
+            return jsonify({"错误": "无此事件"}), 404
+        return jsonify(st)
+
+    @app.get("/api/收据对账")
+    @app.get("/api/回执对账")
+    @app.get("/api/对账")
+    @app.get("/api/互证/收据对账")
+    def api_收据对账():
+        eid = request.args.get("事件号")
+        return jsonify(互证.收据对账(eid))
 
     @app.post("/api/投递/批量重试")
     def api_批量重试():

@@ -24,25 +24,81 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>事件详情</h1>
+      <h1>事件详情 · 回执折叠</h1>
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
+      <p class="骨签">骨签：第二张回执在窗内必须折叠 ｜ 影子回执只在边表，不算正式成功票</p>
     </header>
 
 <section class="卷">
   <label>事件号</label><input id="事件号"/>
   <button class="按钮" type="button" id="查">查询</button>
+  <span id="窗态" class="徽章">—</span>
+  <p class="消息" id="消息"></p>
+</section>
+
+<section class="卷" id="折叠卷" hidden>
+  <h2>回执折叠（边表 · 与尝试行联查）</h2>
+  <p id="折叠总论" class="说明"></p>
+  <div class="表绕"><table><thead><tr>
+    <th>折叠号</th><th>窗号</th><th>原尝试号</th><th>回执号</th><th>是否折叠</th><th>标记</th><th>说明</th><th>处置</th><th>回执时</th>
+  </tr></thead><tbody id="折叠表"></tbody></table></div>
+</section>
+
+<section class="卷">
+  <h2>原始账册 JSON</h2>
   <pre id="出" class="说明"></pre>
 </section>
 
   </main>
 
 <script>
-document.getElementById('查').onclick = async () => {
+async function 查() {
+  const id = document.getElementById('事件号').value.trim();
+  if (!id) { document.getElementById('消息').textContent = '请先填事件号'; return; }
   try {
-    const id = document.getElementById('事件号').value;
-    document.getElementById('出').textContent = JSON.stringify(await 投递台.getJSON('/api/事件/'+encodeURIComponent(id)), null, 2);
+    const d = await 投递台.getJSON('/api/事件/' + encodeURIComponent(id));
+    document.getElementById('出').textContent = JSON.stringify(d, null, 2);
+
+    const st = d.窗状态 || await 投递台.getJSON('/api/收据窗?事件号=' + encodeURIComponent(id));
+    const 窗el = document.getElementById('窗态');
+    if (st && st.在窗内) {
+      窗el.textContent = '窗内已折叠 ' + (st.折叠数 ?? (d.折叠数 || 0)) + ' 张 · 剩余约 ' + (st.剩余秒 ?? 0) + ' 秒 · 锚 ' + (st.原尝试号 || '—');
+    } else if ((d.折叠数 || 0) > 0) {
+      窗el.textContent = '已有 ' + d.折叠数 + ' 张窗内已折叠（窗已关）';
+    } else {
+      窗el.textContent = '当前窗外 / 尚无折叠';
+    }
+
+    const folds = d.回执折叠 || d.折叠 || d.影子回执 || [];
+    const 卷 = document.getElementById('折叠卷');
+    const tb = document.getElementById('折叠表');
+    tb.innerHTML = '';
+    const shadows = folds.filter(r => Number(r.是否折叠) === 1);
+    卷.hidden = folds.length === 0;
+    document.getElementById('折叠总论').textContent =
+      '正式尝试 ' + (d.尝试 ? d.尝试.length : 0) + ' 行；窗内折叠影子 ' + shadows.length +
+      ' 行。影子行不算正式成功，账实联查一致。标记：窗内已折叠；说明：窗内重复收据。';
+    for (const r of folds) {
+      const 是折 = Number(r.是否折叠) === 1;
+      const tr = 投递台.行(
+        '<td>' + 投递台.安全文本(r.折叠号) + '</td>' +
+        '<td>' + 投递台.安全文本(r.窗号) + '</td>' +
+        '<td>' + 投递台.安全文本(r.原尝试号) + '</td>' +
+        '<td>' + 投递台.安全文本(r.回执号) + '</td>' +
+        '<td>' + (是折 ? '影子折叠' : '开窗原票') + '</td>' +
+        '<td>' + (是折 ? '<span class="徽章 警">窗内已折叠</span>' : 投递台.安全文本(r.标记 || '')) + '</td>' +
+        '<td>' + (是折 ? '窗内重复收据' : 投递台.安全文本(r.说明 || '')) + '</td>' +
+        '<td>' + 投递台.安全文本(r.处置) + '</td>' +
+        '<td>' + 投递台.安全文本(r.回执时) + '</td>'
+      );
+      tb.appendChild(tr);
+    }
   } catch (e) { document.getElementById('出').textContent = e.message; }
-};
+}
+document.getElementById('查').onclick = 查;
+document.getElementById('事件号').addEventListener('keydown', (e) => { if (e.key === 'Enter') 查(); });
+const q = new URLSearchParams(location.search).get('事件号') || new URLSearchParams(location.search).get('eid');
+if (q) { document.getElementById('事件号').value = q; 查(); }
 </script>
 
 </body>

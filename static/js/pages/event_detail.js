@@ -146,3 +146,11 @@ export function helper_detail_8(n) { return (n ?? 0) + 8; }
 export function helper_detail_9(n) { return (n ?? 0) + 9; }
 export function helper_detail_10(n) { return (n ?? 0) + 10; }
 export function helper_detail_11(n) { return (n ?? 0) + 11; }
+
+// 事件详情必须联查回执折叠边表：影子回执不算正式成功。
+export const 回执折叠详情 = {
+  bone: '第二张回执在窗内必须折叠',
+  marker: '窗内已折叠',
+  edgeNote: '窗内重复收据',
+  keys: ['回执折叠', '折叠', '影子回执', '收据窗', '窗状态'],
+};

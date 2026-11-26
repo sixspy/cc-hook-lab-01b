@@ -123,3 +123,8 @@
     .登录壳 { grid-template-columns: 1fr; }
     .登录左 { padding: 28px; }
   }
+
+/* —— 收据窗折叠（win_fold） —— */
+.徽章.警, .徽章.窗内已折叠 { background: #fde8c8; color: #9a3412; border: 1px solid #f0c98a; }
+.骨签 { color: #7c2d12; background: #fff7ed; border-left: 3px solid #ea580c; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
+td.行末说明, .行末说明 { color: #9a3412; }

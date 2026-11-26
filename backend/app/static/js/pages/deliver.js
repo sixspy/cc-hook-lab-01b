@@ -146,3 +146,14 @@ export function helper_dispatch_8(n) { return (n ?? 0) + 8; }
 export function helper_dispatch_9(n) { return (n ?? 0) + 9; }
 export function helper_dispatch_10(n) { return (n ?? 0) + 10; }
 export function helper_dispatch_11(n) { return (n ?? 0) + 11; }
+
+// 收据窗折叠（骨签：第二张回执在窗内必须折叠）
+// 路径甲：开窗指纹入收据窗账册，窗内重复收据折「回执折叠」边表，拒回刷正式尝试。
+export const 收据窗折叠 = {
+  bone: '第二张回执在窗内必须折叠',
+  marker: '窗内已折叠',
+  edgeNote: '窗内重复收据',
+  listColumns: ['尝试号', '事件号', '端点键', '状态', '窗内折叠', '行末说明'],
+  receiptApi: '/api/回执',
+  foldApi: '/api/折叠',
+};

@@ -13,8 +13,22 @@ def _签名(密钥版本: str, 事件号: str, 摘要: str) -> str:
     return hmac.new(key, raw, hashlib.sha256).hexdigest()[:24]
 
 
-def 投递一次(事件号: str, 强制失败: bool = False) -> dict:
-    """对事件执行一次签名投递。本地模拟：默认成功；强制失败或端点停用则记失败。"""
+def 投递一次(事件号: str, 强制失败: bool = False,
+             回执号: str | None = None, 收据号: str | None = None, **额外) -> dict:
+    """对事件执行一次签名投递。本地模拟：默认成功；强制失败或端点停用则记失败。
+
+    若带 ``回执号/收据号``，本口退化为「收下回执」入口并委托收据窗裁决
+    （在窗折叠、出窗追加尝试），避免撞到「事件已投递，不可再投」的状态守卫
+    造成入队口/投递口假绿。不带回执参数时基线行为一字不变。
+    """
+    if 回执号 or 收据号 or 额外.get("receipt_no"):
+        from app.services import 收据窗
+
+        return 收据窗.收下回执(
+            事件号,
+            回执号=回执号 or 收据号 or 额外.get("receipt_no"),
+            **{k: v for k, v in 额外.items() if k in ("窗秒", "现在", "时刻")},
+        )
     t = 此刻()
     尝试号 = f"TRY-{uuid.uuid4().hex[:10]}"
     conn = 连接()

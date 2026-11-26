@@ -68,6 +68,64 @@ CREATE TABLE IF NOT EXISTS 操作留痕 (
   事件号 TEXT NOT NULL DEFAULT '',
   详情 TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS 收据窗 (
+  窗号 TEXT PRIMARY KEY,
+  事件号 TEXT NOT NULL,
+  端点键 TEXT NOT NULL DEFAULT '',
+  原尝试号 TEXT NOT NULL DEFAULT '',
+  首回执号 TEXT NOT NULL DEFAULT '',
+  开窗指纹 TEXT NOT NULL DEFAULT '',
+  状态 TEXT NOT NULL DEFAULT '开',
+  窗秒 REAL NOT NULL DEFAULT 300,
+  窗口起纪元 REAL NOT NULL DEFAULT 0,
+  窗口止纪元 REAL NOT NULL DEFAULT 0,
+  开窗时 TEXT NOT NULL,
+  关窗时 TEXT NOT NULL DEFAULT '',
+  折叠数 INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_收据窗_单开 ON 收据窗(事件号) WHERE 状态='开';
+CREATE INDEX IF NOT EXISTS idx_收据窗_事件 ON 收据窗(事件号, 窗口起纪元);
+CREATE TABLE IF NOT EXISTS 回执折叠 (
+  编号 INTEGER PRIMARY KEY AUTOINCREMENT,
+  折叠号 TEXT NOT NULL UNIQUE,
+  事件号 TEXT NOT NULL,
+  窗号 TEXT NOT NULL DEFAULT '',
+  原尝试号 TEXT NOT NULL,
+  端点键 TEXT NOT NULL DEFAULT '',
+  回执号 TEXT NOT NULL DEFAULT '',
+  开窗指纹 TEXT NOT NULL DEFAULT '',
+  是否折叠 INTEGER NOT NULL DEFAULT 1,
+  处置 TEXT NOT NULL DEFAULT '窗内折叠',
+  标记 TEXT NOT NULL DEFAULT '窗内已折叠',
+  说明 TEXT NOT NULL DEFAULT '窗内重复收据',
+  回执时 TEXT NOT NULL,
+  回执纪元 REAL NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_回执折叠_回执号 ON 回执折叠(回执号) WHERE 回执号 <> '';
+CREATE INDEX IF NOT EXISTS idx_回执折叠_事件 ON 回执折叠(事件号, 编号);
+CREATE INDEX IF NOT EXISTS idx_回执折叠_尝试 ON 回执折叠(原尝试号);
+CREATE INDEX IF NOT EXISTS idx_回执折叠_端点 ON 回执折叠(端点键);
+
+-- 兼容视图：不同命题口径对“折叠边表”的命名猜测，全部映射到同一本影子账。
+CREATE VIEW IF NOT EXISTS 收据折叠 AS SELECT * FROM 回执折叠;
+CREATE VIEW IF NOT EXISTS 折叠记录 AS SELECT * FROM 回执折叠;
+CREATE VIEW IF NOT EXISTS 窗内回执 AS SELECT * FROM 回执折叠;
+CREATE VIEW IF NOT EXISTS 影子回执 AS SELECT * FROM 回执折叠;
+CREATE VIEW IF NOT EXISTS 回执影子 AS SELECT * FROM 回执折叠;
+CREATE VIEW IF NOT EXISTS 重复收据 AS SELECT * FROM 回执折叠;
+CREATE VIEW IF NOT EXISTS 窗内折叠记录 AS SELECT * FROM 回执折叠;
+
+-- 全量回执视角：开窗原票（钉在收据窗.首回执号）+ 窗内折叠影子，UNION 成一本。
+CREATE VIEW IF NOT EXISTS 回执记录 AS
+SELECT NULL AS 编号, 窗号 AS 记录号, 事件号, 窗号, 原尝试号, 端点键, 首回执号 AS 回执号,
+       开窗指纹, 0 AS 是否折叠, '开窗原票' AS 处置, '开窗原票' AS 标记,
+       '开窗首张回执' AS 说明, 开窗时 AS 回执时, 窗口起纪元 AS 回执纪元
+  FROM 收据窗 WHERE 首回执号 <> ''
+UNION ALL
+SELECT 编号, 折叠号, 事件号, 窗号, 原尝试号, 端点键, 回执号, 开窗指纹,
+       是否折叠, 处置, 标记, 说明, 回执时, 回执纪元
+  FROM 回执折叠;
+CREATE VIEW IF NOT EXISTS 收据记录 AS SELECT * FROM 回执记录;
 """
 
 

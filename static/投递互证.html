@@ -30,13 +30,49 @@
 
 <section class="卷">
   <button class="按钮" type="button" id="跑">跑互证</button>
+  <button class="按钮 次" type="button" id="收据对账钮">收据窗对账</button>
   <pre id="出" class="说明"></pre>
+</section>
+<section class="卷" id="收据卷" hidden>
+  <h2>收据窗对账（正式尝试 ⨝ 回执折叠边表）</h2>
+  <p id="收据总论" class="说明"></p>
+  <div class="表绕"><table><thead><tr>
+    <th>事件号</th><th>正式成功票数</th><th>影子折叠数</th><th>误标新已投</th><th>窗内双票异常</th><th>对齐</th><th>问题</th>
+  </tr></thead><tbody id="收据表"></tbody></table></div>
 </section>
 <section class="卷"><div class="表绕"><table><thead><tr><th>批次号</th><th>时刻</th><th>事件总数</th><th>已投递</th><th>死信</th><th>待投</th><th>对齐</th><th>说明</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
 <script>
+async function 刷收据对账() {
+  const rep = await 投递台.getJSON('/api/收据对账');
+  document.getElementById('收据卷').hidden = false;
+  document.getElementById('收据总论').textContent =
+    '全账对齐：' + (rep.对齐 ? '是' : '否') +
+    '；正式成功票 ' + rep.正式成功票数 +
+    '；窗内折叠影子 ' + rep.窗内折叠数 +
+    '；误标新已投 ' + rep.误标新已投数 +
+    '；窗内双票异常 ' + rep.窗内双票异常数 +
+    '。影子行不算正式成功。';
+  const tb = document.getElementById('收据表'); tb.innerHTML = '';
+  for (const x of rep.逐事件 || []) {
+    if (!(x.影子折叠数 || x.开窗数 || x.窗内双票异常数)) continue;
+    const tr = 投递台.行(
+      '<td>' + 投递台.安全文本(x.事件号) + '</td>' +
+      '<td>' + x.正式成功票数 + '</td>' +
+      '<td>' + x.影子折叠数 + '</td>' +
+      '<td>' + x.误标新已投数 + '</td>' +
+      '<td>' + x.窗内双票异常数 + '</td>' +
+      '<td>' + (x.对齐 ? '是' : '<b style="color:#b00">否</b>') + '</td>' +
+      '<td>' + 投递台.安全文本((x.问题 || []).join('；')) + '</td>'
+    );
+    tb.appendChild(tr);
+  }
+}
+document.getElementById('收据对账钮').onclick = async () => {
+  try { await 刷收据对账(); } catch (e) { document.getElementById('出').textContent = e.message; }
+};
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/互证');
   const tb = document.getElementById('表'); tb.innerHTML='';
@@ -45,8 +81,10 @@ async function 刷表() {
   }
 }
 document.getElementById('跑').onclick = async () => {
-  document.getElementById('出').textContent = JSON.stringify(await 投递台.postJSON('/api/互证/跑',{}), null, 2);
+  const rep = await 投递台.postJSON('/api/互证/跑',{});
+  document.getElementById('出').textContent = JSON.stringify(rep, null, 2);
   await 刷表();
+  try { await 刷收据对账(); } catch (_) {}
 };
 刷表();
 </script>

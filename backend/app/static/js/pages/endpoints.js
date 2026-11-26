@@ -146,3 +146,11 @@ export function helper_crew_8(n) { return (n ?? 0) + 8; }
 export function helper_crew_9(n) { return (n ?? 0) + 9; }
 export function helper_crew_10(n) { return (n ?? 0) + 10; }
 export function helper_crew_11(n) { return (n ?? 0) + 11; }
+
+// 端点名册同步各端点的窗内折叠数（回执折叠边表按端点键聚合）。
+export const 端点折叠列 = {
+  bone: '第二张回执在窗内必须折叠',
+  column: '窗内折叠',
+  marker: '窗内已折叠',
+  countKeys: ['窗内折叠数', '折叠数', '回执折叠数'],
+};
